@@ -3,12 +3,12 @@ package main
 import "fmt"
 
 const (
-	VAR = iota
-	SYM = iota
+	VAR = "VAR"
+	SYM = "SYM"
 )
 
 type Term struct {
-	Type int
+	Type string
 	Name string
 }
 
@@ -48,7 +48,7 @@ func MergeKBs(kb1 KnowledgeBase, kb2 KnowledgeBase) KnowledgeBase {
 	for _, v := range kb1 {
 		exists := false
 		for _, existing := range merged {
-			if existing.PredicateSymbol != v.PredicateSymbol {
+			if existing.PredicateSymbol == v.PredicateSymbol {
 				exists = true
 			}
 		}
@@ -59,7 +59,7 @@ func MergeKBs(kb1 KnowledgeBase, kb2 KnowledgeBase) KnowledgeBase {
 	for _, v := range kb2 {
 		exists := false
 		for _, existing := range merged {
-			if existing.PredicateSymbol != v.PredicateSymbol {
+			if existing.PredicateSymbol == v.PredicateSymbol {
 				exists = true
 			}
 		}
@@ -98,18 +98,16 @@ func (bodyAtom Atom) unify(fact Atom) Substitution {
 	}
 	subs := make(map[Term]Term)
 	// Walk both term lists
+	fmt.Println("Unifying")
 	for i := 0; i < len(bodyAtom.Terms); i++ {
 		bodyTerm := bodyAtom.Terms[i]
 		factTerm := fact.Terms[i]
-		if factTerm.Type == VAR {
-			panic(fmt.Sprintf("Fact atom term %d (name: %s) must be ground, not a variable",
-				i, factTerm.Name))
-		}
-		if bodyTerm.Type == SYM { // factTerm.Type is implicitly SYM too
-			if bodyTerm != factTerm {
+		if factTerm.Type == SYM && bodyTerm.Type == SYM {
+			if bodyTerm.Name != factTerm.Name {
 				return nil
 			}
-		} else { // bodyTerm.Type == VAR
+		}
+		if factTerm.Type == SYM && bodyTerm.Type == VAR {
 			if existingSym, found := subs[bodyTerm]; found {
 				if existingSym != factTerm {
 					// Contradictory variable assignment
@@ -120,6 +118,10 @@ func (bodyAtom Atom) unify(fact Atom) Substitution {
 				subs[bodyTerm] = factTerm
 			}
 		}
+		if factTerm.Type == VAR {
+			panic(fmt.Sprintf("Fact atom term %d (name: %s) must be ground, not a variable",
+				i, factTerm.Name))
+		}
 	}
 
 	return subs
@@ -129,12 +131,15 @@ func (kb KnowledgeBase) EvalAtom(bodyAtom Atom, substitutions []Substitution) []
 	result := make([]Substitution, len(substitutions))
 	for i, substitution := range substitutions {
 		grounded := bodyAtom.Substitute(substitution)
-		extension := bodyAtom.unify(grounded)
-		if extension == nil {
-			result[i] = substitution
-		} else {
-			result[i] = Merge(substitution, extension)
+		fmt.Println("Grounded:", grounded)
+		for _, fact := range kb {
+			extension := grounded.unify(fact)
+			fmt.Println("Unified extension:", extension)
+			if extension != nil {
+				substitution = Merge(substitution, extension)
+			}
 		}
+		result[i] = substitution
 	}
 	return result
 }
@@ -149,9 +154,19 @@ func (kb KnowledgeBase) WalkBody(bodyAtoms []Atom) []Substitution {
 
 func (kb KnowledgeBase) EvalRule(rule Rule) KnowledgeBase {
 	atoms := make([]Atom, len(rule.Body))
+	fmt.Println("Evaluating rule:", rule.Head.PredicateSymbol)
+	fmt.Println("Rule body:", rule.Body)
+	fmt.Println("KB:", kb)
+	if len(rule.Body) == 0 {
+		fmt.Printf("FACT\n\n")
+		return []Atom{rule.Head}
+	}
 	for i, subs := range kb.WalkBody(rule.Body) {
+		fmt.Println("Potential subs:", subs)
 		atoms[i] = rule.Head.Substitute(subs)
 	}
+	fmt.Println("AFTER ATOMS:", atoms)
+	fmt.Println("")
 	return atoms
 }
 
@@ -163,6 +178,9 @@ func ImmediateConsequence(program Program, kb KnowledgeBase) KnowledgeBase {
 }
 
 func (rule Rule) IsRangeRestricted() bool {
+	if len(rule.Body) == 0 {
+		return true
+	}
 	for _, headTerm := range rule.Head.Terms {
 		exists := false
 		if headTerm.Type == VAR {
@@ -192,16 +210,35 @@ func Solve(program Program) {
 	kb := make([]Atom, 0)
 	oldKB := kb
 	for {
+		oldKB = kb
 		kb = ImmediateConsequence(program, kb)
 		if len(kb) == len(oldKB) {
 			fmt.Println("done")
+			fmt.Println(kb)
 			return
 		} else {
-			return
+			fmt.Println("old:", len(oldKB))
+			fmt.Println("new:", len(kb))
+			//return
 		}
 	}
 }
 
 func main() {
+
+	fact1 := Rule{
+		Head: Atom{"first", []Term{{SYM, "a"}}},
+		Body: []Atom{},
+	}
+	rule1 := Rule{
+		Head: Atom{"second", []Term{{VAR, "X"}}},
+		Body: []Atom{{"first", []Term{{VAR, "X"}}}},
+	}
+	query1 := Rule{
+		Head: Atom{"query1", []Term{{VAR, "Y"}}},
+		Body: []Atom{{"second", []Term{{VAR, "Y"}}}},
+	}
+	program := []Rule{fact1, rule1, query1}
 	fmt.Println("hello!")
+	Solve(program)
 }
