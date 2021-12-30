@@ -201,7 +201,7 @@ func (rule Rule) IsRangeRestricted() bool {
 	return true
 }
 
-func Solve(program Program) {
+func Solve(program Program) KnowledgeBase {
 	for _, rule := range program {
 		if !rule.IsRangeRestricted() {
 			panic(fmt.Sprintf("Rule %s is not range restricted", rule.Head.PredicateSymbol))
@@ -215,17 +215,28 @@ func Solve(program Program) {
 		if len(kb) == len(oldKB) {
 			fmt.Println("done")
 			fmt.Println(kb)
-			return
+			return kb
 		} else {
-			fmt.Println("old:", len(oldKB))
-			fmt.Println("new:", len(kb))
+			//fmt.Println("old:", len(oldKB))
+			//fmt.Println("new:", len(kb))
 			//return
 		}
 	}
 }
 
-func main() {
+func Query(program Program, query Rule) {
+	kb := Solve(append(program, query))
+	fmt.Println("Query result:")
+	for _, atom := range kb {
+		if atom.PredicateSymbol == query.Head.PredicateSymbol {
+			fmt.Println(atom)
+		} else {
+		}
+	}
+	fmt.Println(".")
+}
 
+func main() {
 	fact1 := Rule{
 		Head: Atom{"first", []Term{{SYM, "a"}}},
 		Body: []Atom{},
@@ -238,7 +249,6 @@ func main() {
 		Head: Atom{"query1", []Term{{VAR, "Y"}}},
 		Body: []Atom{{"second", []Term{{VAR, "Y"}}}},
 	}
-	program := []Rule{fact1, rule1, query1}
-	fmt.Println("hello!")
-	Solve(program)
+	program := []Rule{fact1, rule1}
+	Query(program, query1)
 }
