@@ -29,8 +29,6 @@ type KnowledgeBase []Atom
 // The hardest word to type in the English language
 type Substitution map[Term]Term
 
-var emptySubstition Substitution = make(map[Term]Term)
-
 // Convenience merge function
 func Merge(subs1 Substitution, subs2 Substitution) Substitution {
 	merged := make(map[Term]Term)
@@ -230,7 +228,6 @@ func Query(program Program, query Rule) {
 	for _, atom := range kb {
 		if atom.PredicateSymbol == query.Head.PredicateSymbol {
 			fmt.Println(atom)
-		} else {
 		}
 	}
 	fmt.Println(".")
