@@ -1,8 +1,18 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strings"
 
-const (
+	"github.com/alecthomas/participle/v2"
+)
+
+const ( // Misc
+	QUERY_PREDICATE = "__query"
+)
+
+const ( // Term Type
 	VAR = "VAR"
 	SYM = "SYM"
 )
@@ -17,17 +27,109 @@ type Atom struct {
 	Terms           []Term
 }
 
+func (a Atom) Equals(b Atom) bool {
+	if a.PredicateSymbol != b.PredicateSymbol {
+		return false
+	}
+	if len(a.Terms) != len(b.Terms) {
+		return false
+	}
+	for i, aTerm := range a.Terms {
+		bTerm := b.Terms[i]
+		if aTerm.Type != bTerm.Type {
+			return false
+		}
+		if aTerm.Name != bTerm.Name {
+			return false
+		}
+	}
+	return true
+}
+
+func (a Atom) String() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s(", a.PredicateSymbol)
+	for i, term := range a.Terms {
+		fmt.Fprintf(&b, term.Name)
+		if i != len(a.Terms)-1 {
+			fmt.Fprintf(&b, ",")
+		} else {
+			fmt.Fprintf(&b, ")")
+		}
+	}
+	return b.String()
+}
+
 type Rule struct {
 	Head Atom
 	Body []Atom
 }
 
+func (r Rule) IsFact() bool {
+	return len(r.Body) == 0
+}
+
+func (r Rule) String() string {
+	var b strings.Builder
+	b.WriteString(r.Head.String())
+	if len(r.Body) == 0 {
+		b.WriteString(".")
+	} else {
+		b.WriteString(" :- ")
+		for i, atom := range r.Body {
+			b.WriteString(atom.String())
+			if i != len(r.Body)-1 {
+				b.WriteString(", ")
+			} else {
+				b.WriteString(".")
+			}
+		}
+	}
+	return b.String()
+}
+
 type Program []Rule
+
+func (p Program) String() string {
+	var b strings.Builder
+	for _, rule := range p {
+		b.WriteString(rule.String())
+		b.WriteString("\n")
+	}
+	return b.String()
+}
 
 type KnowledgeBase []Atom
 
+func (kb KnowledgeBase) String() string {
+	var b strings.Builder
+	//b.WriteString("-- Knowledge Base --\n")
+	for _, atom := range kb {
+		b.WriteString(atom.String())
+		b.WriteString(".\n")
+	}
+	//b.WriteString("----")
+	return b.String()
+}
+
 // The hardest word to type in the English language
 type Substitution map[Term]Term
+
+func (s Substitution) String() string {
+	var b strings.Builder
+	b.WriteString("{\n")
+	for k, v := range s {
+		b.WriteString(" ")
+		b.WriteString(k.Name)
+		b.WriteString(fmt.Sprintf("(%s)", k.Type))
+		b.WriteString(" => ")
+		b.WriteString(v.Name)
+		b.WriteString(fmt.Sprintf("(%s)", v.Type))
+		b.WriteString(" ")
+	}
+	b.WriteString("\n}")
+	return b.String()
+}
 
 // Convenience merge function
 func Merge(subs1 Substitution, subs2 Substitution) Substitution {
@@ -46,7 +148,8 @@ func MergeKBs(kb1 KnowledgeBase, kb2 KnowledgeBase) KnowledgeBase {
 	for _, v := range kb1 {
 		exists := false
 		for _, existing := range merged {
-			if existing.PredicateSymbol == v.PredicateSymbol {
+			//if existing.PredicateSymbol == v.PredicateSymbol {
+			if existing.Equals(v) {
 				exists = true
 			}
 		}
@@ -57,7 +160,8 @@ func MergeKBs(kb1 KnowledgeBase, kb2 KnowledgeBase) KnowledgeBase {
 	for _, v := range kb2 {
 		exists := false
 		for _, existing := range merged {
-			if existing.PredicateSymbol == v.PredicateSymbol {
+			//if existing.PredicateSymbol == v.PredicateSymbol {
+			if existing.Equals(v) {
 				exists = true
 			}
 		}
@@ -89,25 +193,28 @@ func (atom Atom) Substitute(subs Substitution) Atom {
 
 func (bodyAtom Atom) unify(fact Atom) Substitution {
 	if bodyAtom.PredicateSymbol != fact.PredicateSymbol {
+		//fmt.Println("1")
 		return nil
 	}
 	if len(bodyAtom.Terms) != len(fact.Terms) {
+		//fmt.Println("2")
 		return nil
 	}
 	subs := make(map[Term]Term)
 	// Walk both term lists
-	fmt.Println("Unifying")
 	for i := 0; i < len(bodyAtom.Terms); i++ {
 		bodyTerm := bodyAtom.Terms[i]
 		factTerm := fact.Terms[i]
 		if factTerm.Type == SYM && bodyTerm.Type == SYM {
 			if bodyTerm.Name != factTerm.Name {
+				//fmt.Println("3")
 				return nil
 			}
 		}
 		if factTerm.Type == SYM && bodyTerm.Type == VAR {
 			if existingSym, found := subs[bodyTerm]; found {
 				if existingSym != factTerm {
+					//fmt.Println("4")
 					// Contradictory variable assignment
 					// e.g., unifying p(X, X) with p("A", "B")
 					return nil
@@ -117,8 +224,7 @@ func (bodyAtom Atom) unify(fact Atom) Substitution {
 			}
 		}
 		if factTerm.Type == VAR {
-			panic(fmt.Sprintf("Fact atom term %d (name: %s) must be ground, not a variable",
-				i, factTerm.Name))
+			panic(fmt.Sprintf("Attempting to unify with `%s` atom as a fact, but it contains variables (term index %d, name %s). Unifying with body atom `%s`.", fact.String(), i, factTerm.Name, bodyAtom.String()))
 		}
 	}
 
@@ -126,18 +232,21 @@ func (bodyAtom Atom) unify(fact Atom) Substitution {
 }
 
 func (kb KnowledgeBase) EvalAtom(bodyAtom Atom, substitutions []Substitution) []Substitution {
-	result := make([]Substitution, len(substitutions))
-	for i, substitution := range substitutions {
+	result := make([]Substitution, 0)
+	for _, substitution := range substitutions {
+		// TODO: reverse atom and subs
 		grounded := bodyAtom.Substitute(substitution)
-		fmt.Println("Grounded:", grounded)
 		for _, fact := range kb {
+			//fmt.Printf("Attempting to unify body atom %s with fact %s, subs: %s\n", grounded.String(), fact.String(), substitution.String())
 			extension := grounded.unify(fact)
-			fmt.Println("Unified extension:", extension)
 			if extension != nil {
-				substitution = Merge(substitution, extension)
+				result = append(result, Merge(substitution, extension))
+				//fmt.Println("Successful unification:", result)
+			} else {
+				//fmt.Println("Failed unification.")
 			}
 		}
-		result[i] = substitution
+		//result[i] = substitution
 	}
 	return result
 }
@@ -151,25 +260,19 @@ func (kb KnowledgeBase) WalkBody(bodyAtoms []Atom) []Substitution {
 }
 
 func (kb KnowledgeBase) EvalRule(rule Rule) KnowledgeBase {
-	atoms := make([]Atom, len(rule.Body))
-	fmt.Println("Evaluating rule:", rule.Head.PredicateSymbol)
-	fmt.Println("Rule body:", rule.Body)
-	fmt.Println("KB:", kb)
+	atoms := make([]Atom, 0)
 	if len(rule.Body) == 0 {
-		fmt.Printf("FACT\n\n")
 		return []Atom{rule.Head}
 	}
-	for i, subs := range kb.WalkBody(rule.Body) {
-		fmt.Println("Potential subs:", subs)
-		atoms[i] = rule.Head.Substitute(subs)
+	for _, subs := range kb.WalkBody(rule.Body) {
+		atoms = append(atoms, rule.Head.Substitute(subs))
 	}
-	fmt.Println("AFTER ATOMS:", atoms)
-	fmt.Println("")
 	return atoms
 }
 
 func ImmediateConsequence(program Program, kb KnowledgeBase) KnowledgeBase {
 	for _, rule := range program {
+		//fmt.Printf("Evaluating rule %s KB:\n%s\n", rule.String(), kb.String())
 		kb = MergeKBs(kb, kb.EvalRule(rule))
 	}
 	return kb
@@ -205,47 +308,63 @@ func Solve(program Program) KnowledgeBase {
 			panic(fmt.Sprintf("Rule %s is not range restricted", rule.Head.PredicateSymbol))
 		}
 	}
-	kb := make([]Atom, 0)
+	kb := KnowledgeBase(make([]Atom, 0))
 	oldKB := kb
-	for {
+	for i := 0; ; i++ {
 		oldKB = kb
 		kb = ImmediateConsequence(program, kb)
 		if len(kb) == len(oldKB) {
-			fmt.Println("done")
-			fmt.Println(kb)
 			return kb
-		} else {
-			//fmt.Println("old:", len(oldKB))
-			//fmt.Println("new:", len(kb))
-			//return
 		}
 	}
 }
 
 func Query(program Program, query Rule) {
 	kb := Solve(append(program, query))
+	actualQueryAtom := query.Body[0]
 	fmt.Println("Query result:")
 	for _, atom := range kb {
-		if atom.PredicateSymbol == query.Head.PredicateSymbol {
-			fmt.Println(atom)
+		if atom.PredicateSymbol == actualQueryAtom.PredicateSymbol &&
+			len(atom.Terms) == len(actualQueryAtom.Terms) {
+			match := true
+			for i, queryTerm := range actualQueryAtom.Terms {
+				term := atom.Terms[i]
+				if queryTerm.Type == SYM &&
+					!(term.Type == SYM && term.Name == queryTerm.Name) {
+					match = false
+				}
+			}
+			if match {
+				fmt.Printf(atom.String())
+				fmt.Println(".")
+			}
 		}
 	}
-	fmt.Println(".")
 }
 
 func main() {
-	fact1 := Rule{
-		Head: Atom{"first", []Term{{SYM, "a"}}},
-		Body: []Atom{},
+	args := os.Args[1:]
+	parser, err := participle.Build(&DatalogSyntax{})
+	if err != nil {
+		panic(err)
 	}
-	rule1 := Rule{
-		Head: Atom{"second", []Term{{VAR, "X"}}},
-		Body: []Atom{{"first", []Term{{VAR, "X"}}}},
+	fileName := args[0]
+	bytes, err := os.ReadFile(fileName)
+	if err != nil {
+		panic(err)
 	}
-	query1 := Rule{
-		Head: Atom{"query1", []Term{{VAR, "Y"}}},
-		Body: []Atom{{"second", []Term{{VAR, "Y"}}}},
+	ast := &DatalogSyntax{}
+	err = parser.ParseString(fileName, string(bytes), ast)
+	if err != nil {
+		panic(err)
 	}
-	program := []Rule{fact1, rule1}
-	Query(program, query1)
+	program := ConstructProgram(*ast)
+	fmt.Printf("Program:\n%s", program.String())
+	fmt.Println("")
+	query := ConstructQuery(*ast)
+	fmt.Println("Query:", query.String())
+	fmt.Println("")
+	if query != nil {
+		Query(program, *query)
+	}
 }
