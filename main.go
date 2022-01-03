@@ -283,8 +283,8 @@ func (rule Rule) IsRangeRestricted() bool {
 		return true
 	}
 	for _, headTerm := range rule.Head.Terms {
-		exists := false
 		if headTerm.Type == VAR {
+			exists := false
 			for _, bodyAtom := range rule.Body {
 				for _, bodyAtomTerm := range bodyAtom.Terms {
 					if bodyAtomTerm.Type == VAR {
@@ -294,9 +294,9 @@ func (rule Rule) IsRangeRestricted() bool {
 					}
 				}
 			}
-		}
-		if !exists {
-			return false
+			if !exists {
+				return false
+			}
 		}
 	}
 	return true
@@ -305,7 +305,7 @@ func (rule Rule) IsRangeRestricted() bool {
 func Solve(program Program) KnowledgeBase {
 	for _, rule := range program {
 		if !rule.IsRangeRestricted() {
-			panic(fmt.Sprintf("Rule %s is not range restricted", rule.Head.PredicateSymbol))
+			panic(fmt.Sprintf("Rule %s is not range restricted", rule.String()))
 		}
 	}
 	kb := KnowledgeBase(make([]Atom, 0))
