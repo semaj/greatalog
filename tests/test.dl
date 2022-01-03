@@ -1,8 +1,6 @@
 first(a).
 second(X) :-
   first(X).
-
 - 
-
 second(Y)?
 

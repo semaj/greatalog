@@ -319,10 +319,11 @@ func Solve(program Program) KnowledgeBase {
 	}
 }
 
-func Query(program Program, query Rule) {
+func Query(program Program, query Rule) []Atom {
+	result := make([]Atom, 0)
 	kb := Solve(append(program, query))
 	actualQueryAtom := query.Body[0]
-	fmt.Println("Query result:")
+	//fmt.Println("Query result:")
 	for _, atom := range kb {
 		if atom.PredicateSymbol == actualQueryAtom.PredicateSymbol &&
 			len(atom.Terms) == len(actualQueryAtom.Terms) {
@@ -335,21 +336,19 @@ func Query(program Program, query Rule) {
 				}
 			}
 			if match {
-				fmt.Printf(atom.String())
-				fmt.Println(".")
+				result = append(result, atom)
 			}
 		}
 	}
+	return result
 }
 
-func main() {
-	args := os.Args[1:]
-	parser, err := participle.Build(&DatalogSyntax{})
+func Run(fileName string) []Atom {
+	bytes, err := os.ReadFile(fileName)
 	if err != nil {
 		panic(err)
 	}
-	fileName := args[0]
-	bytes, err := os.ReadFile(fileName)
+	parser, err := participle.Build(&DatalogSyntax{})
 	if err != nil {
 		panic(err)
 	}
@@ -359,12 +358,22 @@ func main() {
 		panic(err)
 	}
 	program := ConstructProgram(*ast)
-	fmt.Printf("Program:\n%s", program.String())
-	fmt.Println("")
+	//fmt.Printf("Program:\n%s", program.String())
+	//fmt.Println("")
 	query := ConstructQuery(*ast)
-	fmt.Println("Query:", query.String())
-	fmt.Println("")
-	if query != nil {
-		Query(program, *query)
+	//fmt.Println("Query:", query.String())
+	//fmt.Println("")
+	return Query(program, *query)
+}
+
+func main() {
+	args := os.Args[1:]
+	firstArg := args[0]
+	if firstArg == "TEST" {
+		Test()
+	} else {
+		for _, atom := range Run(firstArg) {
+			fmt.Printf("%s.\n", atom.String())
+		}
 	}
 }

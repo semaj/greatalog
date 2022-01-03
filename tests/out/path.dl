@@ -1,0 +1,16 @@
+path(d, c).
+path(a, d).
+path(b, a).
+path(d, b).
+path(b, d).
+path(a, a).
+path(a, b).
+path(b, c).
+path(d, a).
+path(c, c).
+path(c, d).
+path(b, b).
+path(a, c).
+path(c, b).
+path(d, d).
+path(c, a).

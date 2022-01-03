@@ -7,7 +7,5 @@ trusted(ca).
 permit(User, Priv, Name) :-
     contains(Auth, Priv, Name, User),
     trusted(Auth).
-
 -
-
 permit(User, Priv, Name)?

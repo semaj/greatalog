@@ -6,7 +6,7 @@ import (
 
 type DatalogSyntax struct {
 	Expressions []ExpressionSyntax `@@*`
-	Query       *AtomSyntax        `("-" @@ "?")?`
+	Query       *AtomSyntax        `"-" @@ "?"`
 }
 
 type ExpressionSyntax struct {

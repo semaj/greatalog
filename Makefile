@@ -1,3 +1,7 @@
+all: build
 
-all:
-	go build -o main main.go parser.go
+build:
+	go build -o main main.go parser.go tester.go
+
+test: build
+	./main TEST
